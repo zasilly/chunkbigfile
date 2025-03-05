@@ -5,7 +5,7 @@ const path = require("path");
 const INPUT_FILE = "./hugefile.txt";
 
 //определяем размер чанка байты=-кб=-мб. для теста ограничился значением в 350кб, потом для финального решения
-// нужно раскоментить умножение до мегабайтов
+//нужно раскоментить умножение до мегабайтов
 const CHUNK_SIZE = 350 * 1024; //* 1024;
 
 //папка для временных файлов
@@ -60,13 +60,61 @@ async function writeChunk(chunk, index) {
   await fs.promises.writeFile(filePath, chunk.join("\n"));
 }
 
+// слияние чанков в один файл
+async function mergeFiles() {
+  let files = fs.readdirSync(TEMP_DIR).map((file) => path.join(TEMP_DIR, file));
+  let streams = files.map((file) =>
+    readline.createInterface({
+      input: fs.createReadStream(file, { encoding: "utf-8" }),
+    })
+  );
+
+  //запускаем все стримы по очереди и ждем их завершения
+  let lines = await Promise.all(
+    streams.map(async (s) => {
+      let result = await s.next();
+      return result;
+    })
+  );
+
+  let outputStream = fs.createWriteStream(OUTPUT_FILE);
+
+  // используем цикл, чтобы пройти по всем строкам и слить их в правильном порядке
+  for (let continueProcessing = true; continueProcessing; ) {
+    let minIndex = -1;
+    let minValue = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].done) {
+        if (minValue === null || lines[i].value.localeCompare(minValue) < 0) {
+          minValue = lines[i].value;
+          minIndex = i;
+        }
+      }
+    }
+
+    // ели все потоки завершены прекращаем обработку
+    if (minIndex === -1) {
+      continueProcessing = false;
+    } else {
+      outputStream.write(lines[minIndex].value + "\n");
+
+      // обновляем строку из потока с минимальным значением
+      lines[minIndex] = await streams[minIndex][Symbol.asyncIterator]().next();
+    }
+  }
+
+  // завершаем запись в outputStream
+  outputStream.end();
+}
+
 // основной процесс
-(async () => {
-  console.log("разделение файла на чанки...");
+async function processFiles() {
+  console.log("начало");
   await splitFile();
   console.log("разделение завершено!");
-
-  console.log("слияние файлов...");
   await mergeFiles();
-  console.log(`файл отсортирован и сохранён в ${OUTPUT_FILE}`);
-})();
+  console.log("Файл отсортирован и сохранен в " + OUTPUT_FILE);
+}
+
+processFiles();
