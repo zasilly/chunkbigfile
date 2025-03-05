@@ -14,8 +14,9 @@ const TEMP_DIR = "temp_chunks";
 //файл для записи отсортированных данных
 const OUTPUT_FILE = "sorted_output.txt";
 
-// создаем папку
+// создаем папку и итоговый файл
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
+if (!fs.existsSync(OUTPUT_FILE)) fs.writeFileSync(OUTPUT_FILE, "");
 
 // удаляем все файлы в папке (чтобы не лезть вручную во время теста)
 try {
@@ -69,10 +70,28 @@ async function mergeFiles() {
     })
   );
 
+  //TODO-оба варинта не рабочие;
+  // let lines = await Promise.all(
+  //   streams.map(async (s) => {
+  //     let result = await s.next();
+  //     return result;
+  //   })
+  // );
+  // let lines = await Promise.all(
+  //   streams.map(async (stream) => {
+  //     let result = [];
+  //     for await (let chunk of stream) {
+  //       result.push(chunk);
+  //     }
+  //     return result;
+  //   })
+  // );
+
   //запускаем все стримы по очереди и ждем их завершения
+
   let lines = await Promise.all(
     streams.map(async (s) => {
-      let result = await s.next();
+      let result = await s[Symbol.asyncIterator]().next();
       return result;
     })
   );
